@@ -1,0 +1,9 @@
+{:paths   ["src/main"]
+ :deps    {edn-query-language/eql  {:mvn/version "0.0.9"}
+           com.walmartlabs/lacinia {:mvn/version "0.36.0"}}
+ :aliases {:dev {:extra-paths ["src/test"]
+                 :extra-deps  {com.wsscode/pathom      {:mvn/version "2.2.30"}
+                               com.walmartlabs/lacinia {:mvn/version "0.36.0"}
+                               org.clojure/clojure     {:mvn/version "1.10.1"}
+                               org.clojure/test.check  {:mvn/version "0.10.0"}}}}}
+
