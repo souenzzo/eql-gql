@@ -1,52 +1,61 @@
 (ns br.com.souenzzo.eql-gql
   (:require [com.walmartlabs.lacinia.parser.query :as lacinia.parser.query]))
 
-(defn parsed->ast
-  [{::keys [fragments placeholder-prefix key->param->eid]
-    :as    env}
-   {:keys [selections type field-name args] :as el}]
-  (let [params (when args
+(defmulti ->ast #(:type %2))
+
+(defn children
+  [env selections]
+  (vec (for [selection selections
+             children (:children (->ast env selection))]
+         children)))
+
+(defmethod ->ast :fragment-definition
+  [env {:keys [selections on-type]}]
+  {:type     :root
+   :children (children (assoc env ::field-ns (name on-type))
+                       selections)})
+
+(defmethod ->ast :named-fragment
+  [{::keys [fragments] :as env} {:keys [fragment-name]}]
+  (->ast env
+         (get fragments fragment-name)))
+
+(defmethod ->ast :field
+  [{::keys [field-ns key->param->eid] :as env} {:keys [selections args field-name]}]
+  (let [dispatch-key (keyword field-ns
+                              (name field-name))
+        param->eid (get key->param->eid dispatch-key)
+        params (when args
                  (into {}
                        (for [{:keys [arg-name arg-value]} args]
                          [arg-name (:value arg-value)])))
-        prefix (if field-name
-                 (name field-name)
-                 (name type))]
-    (cond-> {:type     :root
-             :children (vec (for [{:keys [field-name selections fragment-name args] :as field} selections
-                                  :let [
-                                        frag (get fragments fragment-name)
-                                        key (if field-name
-                                              (keyword prefix
-                                                       (name field-name))
-                                              (keyword placeholder-prefix (name fragment-name)))
-                                        param->join (get key->param->eid key)
-                                        params (when args
-                                                 (into {}
-                                                       (for [{:keys [arg-name arg-value]} args
-                                                             :when (not= arg-name param->join)]
-                                                         [arg-name (:value arg-value)])))
-                                        params-full (when args
-                                                      (into {}
-                                                            (for [{:keys [arg-name arg-value]} args]
-                                                              [arg-name (:value arg-value)])))
-                                        ident? (contains? params-full param->join)]]
-                              (cond
-                                frag (assoc (parsed->ast env (assoc frag
-                                                               :field-name prefix))
-                                       :type :join
-                                       :key key
-                                       :dispatch-key key)
-                                selections (assoc (parsed->ast env field)
-                                             :type :join
-                                             :key (if ident?
-                                                    [key (get params-full param->join)]
-                                                    key)
-                                             :dispatch-key key)
-                                :else {:type         :prop
-                                       :key          key
-                                       :dispatch-key key})))}
-            params (assoc :params params))))
+        ident? (contains? params param->eid)
+        eql-params (dissoc params param->eid)
+        params? (if (and ident?
+                         (empty? eql-params))
+                  false
+                  args)]
+    {:type     :root
+     :children [(cond-> {:type         :prop
+                         :key          (if ident?
+                                         [dispatch-key (get params param->eid)]
+                                         dispatch-key)
+                         :dispatch-key dispatch-key}
+                        selections (assoc
+                                     :type :join
+                                     :children (children (assoc env
+                                                           ::field-ns (name dispatch-key))
+                                                         selections))
+                        params? (assoc :params eql-params))]}))
+
+(defmethod ->ast :query
+  [{::keys [query->type
+            type->ns]
+    :as    env} {:keys [selections]}]
+  {:type     :root,
+   :children (children (assoc env ::field-ns "query")
+                       selections)})
+
 
 (defn query->ast
   [{::keys [query] :as env}]
@@ -57,6 +66,6 @@
                         els)
         query-el (first (filter (comp #{:query} :type)
                                 els))]
-    (parsed->ast (assoc env
-                   ::fragments fragments)
-                 query-el)))
+    (->ast (assoc env
+             ::fragments fragments)
+           query-el)))

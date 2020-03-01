@@ -51,37 +51,35 @@
 
 (deftest simple
 
-  #_#_(is (= (-> {::eql-gql/query "query { User { id name } }"}
-                 eql-gql/query->ast
-                 eql/ast->query)
-             [{:query/User [:User/id
-                            :User/name]}]))
+  (is (= (-> {::eql-gql/query "query { User { id name } }"}
+             eql-gql/query->ast
+             eql/ast->query)
+         [{:query/User [:User/id
+                        :User/name]}]))
 
-      (is (= (-> {::eql-gql/query              apollo-frags
-                  ::eql-gql/placeholder-prefix ">"}
-                 eql-gql/query->ast
-                 eql/ast->query)
-             '[({:query/people [{:>/NameParts [:people/firstName
-                                               :people/lastName]}
-                                :people/avatar]}
-                {:id "7"})]))
-
+  (is (= (-> {::eql-gql/query              apollo-frags
+              ::eql-gql/placeholder-prefix ">"}
+             eql-gql/query->ast
+             eql/ast->query)
+         '[({:query/people [:Person/firstName
+                            :Person/lastName
+                            (:people/avatar {:size :LARGE})]}
+            {:id "7"})]))
   (is (= (-> {::eql-gql/query           pokemon
               ::eql-gql/key->param->eid {:query/pokemon :name}}
              eql-gql/query->ast
              eql/ast->query)
-         '[({[:query/pokemon "Pikachu"] [:pokemon/id
-                                         :pokemon/number
-                                         :pokemon/name
-                                         {:pokemon/attacks [{:attacks/special [:special/name
-                                                                               :special/type
-                                                                               :special/damage]}]}
-                                         {:pokemon/evolutions [:evolutions/id
-                                                               :evolutions/number
-                                                               :evolutions/name
-                                                               {:evolutions/weight [:weight/minimum
-                                                                                    :weight/maximum]}
-                                                               {:evolutions/attacks [{:attacks/fast [:fast/name
-                                                                                                     :fast/type
-                                                                                                     :fast/damage]}]}]}]}
-            {:name "Pikachu"})])))
+         '[{[:query/pokemon "Pikachu"] [:pokemon/id
+                                        :pokemon/number
+                                        :pokemon/name
+                                        {:pokemon/attacks [{:attacks/special [:special/name
+                                                                              :special/type
+                                                                              :special/damage]}]}
+                                        {:pokemon/evolutions [:evolutions/id
+                                                              :evolutions/number
+                                                              :evolutions/name
+                                                              {:evolutions/weight [:weight/minimum
+                                                                                   :weight/maximum]}
+                                                              {:evolutions/attacks [{:attacks/fast [:fast/name
+                                                                                                    :fast/type
+                                                                                                    :fast/damage]}]}]}]}])))
