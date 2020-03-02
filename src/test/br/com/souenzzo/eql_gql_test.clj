@@ -48,25 +48,56 @@
    }
  }")
 
+(def schema
+  (eql-gql/->schema-index "
+type Attac {
+  name: String!
+  type: String!
+  damage: String!
+  special: Attac
+}
+type Pokemon {
+  id: String!
+  number: String!
+  name: String!
+  attacks: [Attac]
+  evolutions: [Pokemon]
+}
+type Query {
+  me: Person
+  people: Person
+  pokemon: Pokemon
+}
+
+type Person {
+  avatar: String!
+  firstName: String!
+  lastName: String!
+}
+schema {
+  query: Query
+}
+"))
 
 (deftest simple
 
-  (is (= (-> {::eql-gql/query "query { User { id name } }"}
+  (is (= (-> {::eql-gql/query  "query { me { firstName avatar } }"
+              ::eql-gql/schema schema}
              eql-gql/query->ast
              eql/ast->query)
-         [{:query/User [:User/id
-                        :User/name]}]))
-
-  (is (= (-> {::eql-gql/query              apollo-frags
-              ::eql-gql/placeholder-prefix ">"}
+         [{:Query/me [:Person/firstName
+                      :Person/avatar]}]))
+  (is (= (-> {::eql-gql/query  apollo-frags
+              ::eql-gql/schema schema}
              eql-gql/query->ast
              eql/ast->query)
-         '[({:query/people [:Person/firstName
+         '[({:Query/people [:Person/firstName
                             :Person/lastName
-                            (:people/avatar {:size :LARGE})]}
+                            (:Person/avatar {:size :LARGE})]}
             {:id "7"})]))
   (is (= (-> {::eql-gql/query           pokemon
-              ::eql-gql/key->param->eid {:query/pokemon :name}}
+              ::eql-gql/key->param->eid {:query/pokemon :name}
+              ::eql-gql/schema          schema}
              eql-gql/query->ast
              eql/ast->query)
          '[{[:query/pokemon "Pikachu"] [:pokemon/id

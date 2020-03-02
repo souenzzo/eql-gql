@@ -1,5 +1,6 @@
 (ns br.com.souenzzo.eql-gql
-  (:require [com.walmartlabs.lacinia.parser.query :as lacinia.parser.query]))
+  (:require [com.walmartlabs.lacinia.parser.query :as lacinia.parser.query]
+            [com.walmartlabs.lacinia.parser.schema :as parser.schema]))
 
 (defmulti ->ast #(:type %2))
 
@@ -21,8 +22,10 @@
          (get fragments fragment-name)))
 
 (defmethod ->ast :field
-  [{::keys [field-ns key->param->eid] :as env} {:keys [selections args field-name]}]
-  (let [dispatch-key (keyword field-ns
+  [{::keys [field->type field-ns key->param->eid] :as env} {:keys [selections args field-name] :as x}]
+  (let [object-id (get field->type field-name)
+        dispatch-key (keyword field-ns
+
                               (name field-name))
         param->eid (get key->param->eid dispatch-key)
         params (when args
@@ -44,17 +47,29 @@
                         selections (assoc
                                      :type :join
                                      :children (children (assoc env
-                                                           ::field-ns (name dispatch-key))
+                                                           ::field-ns (name object-id))
                                                          selections))
                         params? (assoc :params eql-params))]}))
 
+(defn ->schema-index
+  [schema]
+  (let [{{:keys [query]} :roots
+         :keys           [objects]
+         :as             schema} (parser.schema/parse-schema schema {})]
+    schema))
+
 (defmethod ->ast :query
-  [{::keys [query->type
-            type->ns]
-    :as    env} {:keys [selections]}]
-  {:type     :root,
-   :children (children (assoc env ::field-ns "query")
-                       selections)})
+  [{{:keys [roots objects]} ::schema
+    :as                     env} {:keys [selections]}]
+  (let [object-id (get roots :query)
+        object (get objects object-id)]
+    {:type     :root,
+     :children (children (assoc env
+                           ::field->type (into {}
+                                               (for [[id {:keys [type]}] (:fields object)]
+                                                 [id type]))
+                           ::field-ns (name object-id))
+                         selections)}))
 
 
 (defn query->ast
