@@ -21,11 +21,21 @@
   (->ast env
          (get fragments fragment-name)))
 
-(defmethod ->ast :field
-  [{::keys [field->type field-ns key->param->eid] :as env} {:keys [selections args field-name] :as x}]
-  (let [object-id (get field->type field-name)
-        dispatch-key (keyword field-ns
+(defn field->type-index
+  [{{:keys [objects]} ::schema} object-id]
+  (let [object (get objects object-id)]
+    (into {}
+          (for [[id {:keys [type]}] (:fields object)]
+            [id (if (list? type)
+                  (last type)
+                  type)]))))
 
+(defmethod ->ast :field
+  [{::keys [field->type field-ns key->param->eid] :as env}
+   {:keys [selections args field-name]}]
+  (let [object-id (get field->type field-name)
+
+        dispatch-key (keyword field-ns
                               (name field-name))
         param->eid (get key->param->eid dispatch-key)
         params (when args
@@ -47,27 +57,23 @@
                         selections (assoc
                                      :type :join
                                      :children (children (assoc env
+                                                           ::field->type (field->type-index env object-id)
                                                            ::field-ns (name object-id))
                                                          selections))
                         params? (assoc :params eql-params))]}))
 
 (defn ->schema-index
   [schema]
-  (let [{{:keys [query]} :roots
-         :keys           [objects]
-         :as             schema} (parser.schema/parse-schema schema {})]
+  (let [schema (parser.schema/parse-schema schema {})]
     schema))
 
 (defmethod ->ast :query
   [{{:keys [roots objects]} ::schema
     :as                     env} {:keys [selections]}]
-  (let [object-id (get roots :query)
-        object (get objects object-id)]
+  (let [object-id (get roots :query)]
     {:type     :root,
      :children (children (assoc env
-                           ::field->type (into {}
-                                               (for [[id {:keys [type]}] (:fields object)]
-                                                 [id type]))
+                           ::field->type (field->type-index env object-id)
                            ::field-ns (name object-id))
                          selections)}))
 

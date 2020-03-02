@@ -3,37 +3,38 @@
             [edn-query-language.core :as eql]
             [clojure.test :refer [deftest is testing]]))
 
-(def pokemon
-  "query {
-   pokemon(name: \"Pikachu\") {
-     id
-     number
-     name
-     attacks {
-       special {
-         name
-         type
-         damage
-       }
-     }
-     evolutions {
-       id
-       number
-       name
-       weight {
-         minimum
-         maximum
-       }
-       attacks {
-         fast {
-           name
-           type
-           damage
-         }
-       }
-     }
-   }
- }")
+(def pokemon "
+query {
+  pokemon(name: \"Pikachu\") {
+    id
+    number
+    name
+    attacks {
+      special {
+        name
+        type
+        damage
+      }
+    }
+    evolutions {
+      id
+      number
+      name
+      weight {
+        minimum
+        maximum
+      }
+      attacks {
+       fast {
+          name
+          type
+          damage
+        }
+      }
+    }
+  }
+}
+")
 
 (def apollo-frags
   "fragment NameParts on Person {
@@ -50,25 +51,59 @@
 
 (def schema
   (eql-gql/->schema-index "
+type Attack {
+  name: String
+  type: String
+  damage: Int
+}
+
+type Pokemon {
+  id: ID!
+  number: String
+  name: String
+  weight: PokemonDimension
+  height: PokemonDimension
+  classification: String
+  types: [String]
+  resistant: [String]
+  attacks: PokemonAttack
+  weaknesses: [String]
+  fleeRate: Float
+  maxCP: Int
+  evolutions: [Pokemon]
+  evolutionRequirements: PokemonEvolutionRequirement
+  maxHP: Int
+  image: String
+}
+type PokemonAttack {
+  fast: [Attack]
+  special: [Attack]
+}
+type PokemonDimension {
+  minimum: String
+  maximum: String
+}
+type PokemonEvolutionRequirement {
+  amount: Int
+  name: String
+}
 type Attac {
   name: String!
   type: String!
   damage: String!
   special: Attac
+  fast: Attac
 }
-type Pokemon {
-  id: String!
-  number: String!
-  name: String!
-  attacks: [Attac]
-  evolutions: [Pokemon]
+type Weight {
+  minimum: String!
+  maximum: String!
 }
 type Query {
   me: Person
   people: Person
-  pokemon: Pokemon
+  pokemons(first: Int!): [Pokemon]
+  pokemon(id: String, name: String): Pokemon\n
 }
-
 type Person {
   avatar: String!
   firstName: String!
@@ -96,21 +131,21 @@ schema {
                             (:Person/avatar {:size :LARGE})]}
             {:id "7"})]))
   (is (= (-> {::eql-gql/query           pokemon
-              ::eql-gql/key->param->eid {:query/pokemon :name}
+              ::eql-gql/key->param->eid {:Query/pokemon :name}
               ::eql-gql/schema          schema}
              eql-gql/query->ast
              eql/ast->query)
-         '[{[:query/pokemon "Pikachu"] [:pokemon/id
-                                        :pokemon/number
-                                        :pokemon/name
-                                        {:pokemon/attacks [{:attacks/special [:special/name
-                                                                              :special/type
-                                                                              :special/damage]}]}
-                                        {:pokemon/evolutions [:evolutions/id
-                                                              :evolutions/number
-                                                              :evolutions/name
-                                                              {:evolutions/weight [:weight/minimum
-                                                                                   :weight/maximum]}
-                                                              {:evolutions/attacks [{:attacks/fast [:fast/name
-                                                                                                    :fast/type
-                                                                                                    :fast/damage]}]}]}]}])))
+         '[{[:Query/pokemon "Pikachu"] [:Pokemon/id
+                                        :Pokemon/number
+                                        :Pokemon/name
+                                        {:Pokemon/attacks [{:PokemonAttack/special [:Attack/name
+                                                                                    :Attack/type
+                                                                                    :Attack/damage]}]}
+                                        {:Pokemon/evolutions [:Pokemon/id
+                                                              :Pokemon/number
+                                                              :Pokemon/name
+                                                              {:Pokemon/weight [:PokemonDimension/minimum
+                                                                                :PokemonDimension/maximum]}
+                                                              {:Pokemon/attacks [{:PokemonAttack/fast [:Attack/name
+                                                                                                       :Attack/type
+                                                                                                       :Attack/damage]}]}]}]}])))
