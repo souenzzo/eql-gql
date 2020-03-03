@@ -30,18 +30,47 @@
                   (last type)
                   type)]))))
 
+(defn args->params
+  [{::keys [vars]} args]
+  (into {}
+        (for [{:keys [arg-name arg-value]} args
+              :let [type (get arg-value :type)]]
+          [arg-name (case type
+                      :variable (get vars (get arg-value :value))
+                      (:value arg-value))])))
+
+(defn result-from-directives
+  [env directives]
+  (empty? (for [{:keys [directive-name args]} directives
+                :let [vs (args->params env args)]
+                {:keys [arg-name]} args
+                :let [v (get vs arg-name)
+                      remove? (cond
+                                (and (= directive-name :include)
+                                     (= arg-name :if)
+                                     (false? v)) true)]
+                :when remove?]
+            directive-name)))
+
+
+(defmethod ->ast :inline-fragment
+  [env frag]
+  (prn frag)
+  (->ast env (assoc frag :type :fragment-definition)))
+
 (defmethod ->ast :field
   [{::keys [field->type field-ns key->param->eid] :as env}
-   {:keys [selections args field-name]}]
-  (let [object-id (get field->type field-name)
+   {:keys [selections args field-name directives] :as field}]
+  (let [object-id (or (get field->type field-name)
+                      (throw (ex-info (str "Can't find a type for ':" field-ns "/" (name field-name) "'")
+                                      field)))
+
 
         dispatch-key (keyword field-ns
                               (name field-name))
         param->eid (get key->param->eid dispatch-key)
         params (when args
-                 (into {}
-                       (for [{:keys [arg-name arg-value]} args]
-                         [arg-name (:value arg-value)])))
+                 (args->params env args))
         ident? (contains? params param->eid)
         eql-params (dissoc params param->eid)
         params? (if (and ident?
@@ -49,18 +78,20 @@
                   false
                   args)]
     {:type     :root
-     :children [(cond-> {:type         :prop
-                         :key          (if ident?
-                                         [dispatch-key (get params param->eid)]
-                                         dispatch-key)
-                         :dispatch-key dispatch-key}
-                        selections (assoc
-                                     :type :join
-                                     :children (children (assoc env
-                                                           ::field->type (field->type-index env object-id)
-                                                           ::field-ns (name object-id))
-                                                         selections))
-                        params? (assoc :params eql-params))]}))
+     :children (if (result-from-directives env directives)
+                 [(cond-> {:type         :prop
+                           :key          (if ident?
+                                           [dispatch-key (get params param->eid)]
+                                           dispatch-key)
+                           :dispatch-key dispatch-key}
+                          selections (assoc
+                                       :type :join
+                                       :children (children (assoc env
+                                                             ::field->type (field->type-index env object-id)
+                                                             ::field-ns (name object-id))
+                                                           selections))
+                          params? (assoc :params eql-params))]
+                 [])}))
 
 (defn ->schema-index
   [schema]
@@ -69,11 +100,16 @@
 
 (defmethod ->ast :query
   [{{:keys [roots objects]} ::schema
-    :as                     env} {:keys [selections]}]
+    :as                     env} {:keys [selections vars] :as query}]
   (let [object-id (get roots :query)]
     {:type     :root,
      :children (children (assoc env
                            ::field->type (field->type-index env object-id)
+                           ::vars (merge (into {} (for [{:keys [var-name default]} vars
+                                                        :when (contains? default :value)]
+                                                    [var-name (:value default)]))
+                                         (::vars env))
+
                            ::field-ns (name object-id))
                          selections)}))
 

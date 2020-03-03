@@ -98,8 +98,25 @@ type Weight {
   minimum: String!
   maximum: String!
 }
+
+type CharacterConnection {
+  totalCount: String
+  edges: CharacterNode
+}
+
+type CharacterNode {
+  node: Character
+}
+
+type Character {
+  name: String
+  friends: Character
+  friendsConnection: CharacterConnection
+}
+
 type Query {
   me: Person
+  hero: Character
   people: Person
   pokemons(first: Int!): [Pokemon]
   pokemon(id: String, name: String): Pokemon\n
@@ -114,7 +131,102 @@ schema {
 }
 "))
 
+
+(def query-with-vars
+  "
+  query HeroComparison($first: Int = 3) {
+   leftComparison: hero(episode: EMPIRE) {
+     ...comparisonFields
+   }
+   rightComparison: hero(episode: JEDI) {
+     ...comparisonFields
+   }
+ }
+
+ fragment comparisonFields on Character {
+   name
+   friendsConnection(first: $first) {
+     totalCount
+     edges {
+       node {
+         name
+       }
+     }
+   }
+ }
+ ")
+
+(def query-with-directive
+  "query Hero($episode: Episode, $withFriends: Boolean!) {
+   hero(episode: $episode) {
+     name
+     friends @include(if: $withFriends) {
+       name
+     }
+   }
+ }")
+
+(def inline-frags
+  "query HeroForEpisode($ep: Episode!) {
+   hero(episode: $ep) {
+     name
+     ... on Droid {
+       primaryFunction
+     }
+     ... on Human {
+       height
+     }
+   }
+ }")
+
+
 (deftest simple
+  #_(is (= (-> {::eql-gql/query  inline-frags
+                ::eql-gql/schema schema}
+               eql-gql/query->ast
+               eql/ast->query)
+           '[({:Query/hero [:Character/name
+                            {:Character/friends [:Character/name]}]}
+              {:episode :JEDI})]))
+  (is (= (-> {::eql-gql/query  query-with-directive
+              ::eql-gql/vars   {:episode     :JEDI
+                                :withFriends true}
+              ::eql-gql/schema schema}
+             eql-gql/query->ast
+             eql/ast->query)
+         '[({:Query/hero [:Character/name
+                          {:Character/friends [:Character/name]}]}
+            {:episode :JEDI})]))
+  (is (= (-> {::eql-gql/query  query-with-vars
+              ::eql-gql/schema schema}
+             eql-gql/query->ast
+             eql/ast->query)
+         '[({:Query/hero [:Character/name
+                          ({:Character/friendsConnection [:CharacterConnection/totalCount
+                                                          {:CharacterConnection/edges [{:CharacterNode/node [:Character/name]}]}]}
+                           {:first "3"})]}
+            {:episode :EMPIRE})
+           ({:Query/hero [:Character/name
+                          ({:Character/friendsConnection [:CharacterConnection/totalCount
+                                                          {:CharacterConnection/edges [{:CharacterNode/node [:Character/name]}]}]}
+                           {:first "3"})]}
+            {:episode :JEDI})]))
+
+  (is (= (-> {::eql-gql/query  query-with-vars
+              ::eql-gql/vars   {:first 10}
+              ::eql-gql/schema schema}
+             eql-gql/query->ast
+             eql/ast->query)
+         '[({:Query/hero [:Character/name
+                          ({:Character/friendsConnection [:CharacterConnection/totalCount
+                                                          {:CharacterConnection/edges [{:CharacterNode/node [:Character/name]}]}]}
+                           {:first 10})]}
+            {:episode :EMPIRE})
+           ({:Query/hero [:Character/name
+                          ({:Character/friendsConnection [:CharacterConnection/totalCount
+                                                          {:CharacterConnection/edges [{:CharacterNode/node [:Character/name]}]}]}
+                           {:first 10})]}
+            {:episode :JEDI})]))
 
   (is (= (-> {::eql-gql/query  "query { me { firstName avatar } }"
               ::eql-gql/schema schema}
