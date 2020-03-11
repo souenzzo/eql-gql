@@ -11,8 +11,9 @@
          children)))
 
 (defmethod ->ast :fragment-definition
-  [env {:keys [selections on-type]}]
+  [env {:keys [selections on-type] :as type}]
   {:type     :root
+   :meta     type
    :children (children (assoc env ::field-ns (name on-type))
                        selections)})
 
@@ -78,6 +79,7 @@
                   false
                   args)]
     {:type     :root
+     :meta     field
      :children (if (result-from-directives env directives)
                  [(cond-> {:type         :prop
                            :key          (if ident?
@@ -103,6 +105,7 @@
     :as                     env} {:keys [selections vars] :as query}]
   (let [object-id (get roots :query)]
     {:type     :root,
+     :meta     query
      :children (children (assoc env
                            ::field->type (field->type-index env object-id)
                            ::vars (merge (into {} (for [{:keys [var-name default]} vars
@@ -117,7 +120,7 @@
 
 (defmethod ->ast :mutation
   [{{:keys [roots objects]} ::schema
-    :as                     env} {:keys [selections vars]}]
+    :as                     env} {:keys [selections vars] :as mutation}]
   (let [object-id (get roots :mutation)
         child (children (assoc env
                           ::field->type (field->type-index env object-id)
@@ -129,6 +132,7 @@
                           ::field-ns (name object-id))
                         selections)]
     {:type     :root,
+     :meta     mutation
      :children (vec (for [el child]
                       (-> el
                           (assoc :type :call)
