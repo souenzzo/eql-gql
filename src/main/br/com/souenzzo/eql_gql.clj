@@ -114,6 +114,29 @@
                          selections)}))
 
 
+
+(defmethod ->ast :mutation
+  [{{:keys [roots objects]} ::schema
+    :as                     env} {:keys [selections vars]}]
+  (let [object-id (get roots :mutation)
+        child (children (assoc env
+                          ::field->type (field->type-index env object-id)
+                          ::vars (merge (into {} (for [{:keys [var-name default]} vars
+                                                       :when (contains? default :value)]
+                                                   [var-name (:value default)]))
+                                        (::vars env))
+
+                          ::field-ns (name object-id))
+                        selections)]
+    {:type     :root,
+     :children (vec (for [el child]
+                      (-> el
+                          (assoc :type :call)
+                          (update :dispatch-key symbol)
+                          (update :key symbol)
+                          (update :params #(or % {})))))}))
+
+
 (defn query->ast
   [{::keys [query] :as env}]
   (let [els (lacinia.parser.query/parse-query query)
@@ -121,7 +144,7 @@
                         (comp (filter :fragment-name)
                               (map (juxt :fragment-name identity)))
                         els)
-        query-el (first (filter (comp #{:query} :type)
+        query-el (first (filter (comp #{:query :mutation} :type)
                                 els))]
     (->ast (assoc env
              ::fragments fragments)

@@ -126,8 +126,18 @@ type Person {
   firstName: String!
   lastName: String!
 }
+
+type Maybe {
+  success: Boolean
+}
+
+type Mutation {
+  login: Maybe
+}
+
 schema {
   query: Query
+  mutation: Mutation
 }
 "))
 
@@ -181,6 +191,11 @@ schema {
 
 
 (deftest simple
+  (is (= (-> {::eql-gql/query  "mutation { login { success } }"
+              ::eql-gql/schema schema}
+             eql-gql/query->ast
+             eql/ast->query)
+         '[{(Mutation/login) [:Maybe/success]}]))
   #_(is (= (-> {::eql-gql/query  inline-frags
                 ::eql-gql/schema schema}
                eql-gql/query->ast
