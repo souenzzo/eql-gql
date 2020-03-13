@@ -1,5 +1,6 @@
 (ns br.com.souenzzo.eql-gql-test
   (:require [br.com.souenzzo.eql-gql :as eql-gql]
+            [com.walmartlabs.lacinia.parser.query :as lacinia.parser.query]
             [edn-query-language.core :as eql]
             [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]))
@@ -194,3 +195,14 @@ query {
                                                               {:Pokemon/attacks [{:PokemonAttack/fast [:Attack/name
                                                                                                        :Attack/type
                                                                                                        :Attack/damage]}]}]}]}])))
+
+
+(deftest ast->query
+  (is (= (->> [{:Query/me [:Person/firstName
+                           :Person/avatar]}]
+              eql/query->ast
+              (hash-map ::eql-gql/schema schema ::eql-gql/ast)
+              eql-gql/ast->query
+              lacinia.parser.query/parse-query)
+         (-> "query { me { firstName avatar } }"
+             lacinia.parser.query/parse-query))))

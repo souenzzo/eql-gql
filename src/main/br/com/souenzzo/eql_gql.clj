@@ -1,6 +1,7 @@
 (ns br.com.souenzzo.eql-gql
   (:require [com.walmartlabs.lacinia.parser.query :as lacinia.parser.query]
-            [com.walmartlabs.lacinia.parser.schema :as parser.schema]))
+            [com.walmartlabs.lacinia.parser.schema :as parser.schema]
+            [clojure.string :as string]))
 
 (defmulti ->ast #(:type %2))
 
@@ -119,8 +120,8 @@
 
 
 (defmethod ->ast :mutation
-  [{{:keys [roots objects]} ::schema
-    :as                     env} {:keys [selections vars] :as mutation}]
+  [{{:keys [roots]} ::schema
+    :as             env} {:keys [selections vars] :as mutation}]
   (let [object-id (get roots :mutation)
         child (children (assoc env
                           ::field->type (field->type-index env object-id)
@@ -153,3 +154,30 @@
     (->ast (assoc env
              ::fragments fragments)
            query-el)))
+
+(defmulti ->query #(:type %2))
+
+(defmethod ->query :root
+  [env {:keys [children]}]
+  (str "query{"
+       (string/join " " (map
+                          (partial ->query env)
+                          children))
+       "}"))
+(defmethod ->query :join
+  [{:as env} {:keys [children dispatch-key]}]
+  (str
+    (name dispatch-key)
+    "{"
+    (string/join " " (map (partial ->query env) children))
+    "}"))
+
+
+(defmethod ->query :prop
+  [{::keys [] :as env} {:keys [dispatch-key]}]
+  (name dispatch-key))
+
+
+(defn ast->query
+  [{::keys [ast] :as env}]
+  (->query env ast))
