@@ -1,7 +1,8 @@
 (ns br.com.souenzzo.eql-gql-test
   (:require [br.com.souenzzo.eql-gql :as eql-gql]
             [edn-query-language.core :as eql]
-            [clojure.test :refer [deftest is testing]]))
+            [clojure.test :refer [deftest is testing]]
+            [clojure.java.io :as io]))
 
 (def pokemon "
 query {
@@ -50,96 +51,7 @@ query {
  }")
 
 (def schema
-  (eql-gql/->schema-index "
-type Attack {
-  name: String
-  type: String
-  damage: Int
-}
-
-type Pokemon {
-  id: ID!
-  number: String
-  name: String
-  weight: PokemonDimension
-  height: PokemonDimension
-  classification: String
-  types: [String]
-  resistant: [String]
-  attacks: PokemonAttack
-  weaknesses: [String]
-  fleeRate: Float
-  maxCP: Int
-  evolutions: [Pokemon]
-  evolutionRequirements: PokemonEvolutionRequirement
-  maxHP: Int
-  image: String
-}
-type PokemonAttack {
-  fast: [Attack]
-  special: [Attack]
-}
-type PokemonDimension {
-  minimum: String
-  maximum: String
-}
-type PokemonEvolutionRequirement {
-  amount: Int
-  name: String
-}
-type Attac {
-  name: String!
-  type: String!
-  damage: String!
-  special: Attac
-  fast: Attac
-}
-type Weight {
-  minimum: String!
-  maximum: String!
-}
-
-type CharacterConnection {
-  totalCount: String
-  edges: CharacterNode
-}
-
-type CharacterNode {
-  node: Character
-}
-
-type Character {
-  name: String
-  friends: Character
-  friendsConnection: CharacterConnection
-}
-
-type Query {
-  me: Person
-  hero: Character
-  people: Person
-  pokemons(first: Int!): [Pokemon]
-  pokemon(id: String, name: String): Pokemon\n
-}
-type Person {
-  avatar: String!
-  firstName: String!
-  lastName: String!
-}
-
-type Maybe {
-  success: Boolean
-}
-
-type Mutation {
-  login: Maybe
-}
-
-schema {
-  query: Query
-  mutation: Mutation
-}
-"))
+  (eql-gql/->schema-index (slurp (io/resource "br/com/souenzzo/schema.graphql"))))
 
 
 (def query-with-vars
@@ -203,6 +115,12 @@ schema {
            '[({:Query/hero [:Character/name
                             {:Character/friends [:Character/name]}]}
               {:episode :JEDI})]))
+  (is (= (-> {::eql-gql/query  "{ hero(episode: JEDI) { name }}"
+              ::eql-gql/schema schema}
+             eql-gql/query->ast
+             eql/ast->query)
+         '[({:Query/hero [:Character/name]}
+            {:episode :JEDI})]))
   (is (= (-> {::eql-gql/query  query-with-directive
               ::eql-gql/vars   {:episode     :JEDI
                                 :withFriends true}
@@ -217,13 +135,13 @@ schema {
              eql-gql/query->ast
              eql/ast->query)
          '[({:Query/hero [:Character/name
-                          ({:Character/friendsConnection [:CharacterConnection/totalCount
-                                                          {:CharacterConnection/edges [{:CharacterNode/node [:Character/name]}]}]}
+                          ({:Character/friendsConnection [:FriendsConnection/totalCount
+                                                          {:FriendsConnection/edges [{:FriendsEdge/node [:Character/name]}]}]}
                            {:first "3"})]}
             {:episode :EMPIRE})
            ({:Query/hero [:Character/name
-                          ({:Character/friendsConnection [:CharacterConnection/totalCount
-                                                          {:CharacterConnection/edges [{:CharacterNode/node [:Character/name]}]}]}
+                          ({:Character/friendsConnection [:FriendsConnection/totalCount
+                                                          {:FriendsConnection/edges [{:FriendsEdge/node [:Character/name]}]}]}
                            {:first "3"})]}
             {:episode :JEDI})]))
 
@@ -233,13 +151,13 @@ schema {
              eql-gql/query->ast
              eql/ast->query)
          '[({:Query/hero [:Character/name
-                          ({:Character/friendsConnection [:CharacterConnection/totalCount
-                                                          {:CharacterConnection/edges [{:CharacterNode/node [:Character/name]}]}]}
+                          ({:Character/friendsConnection [:FriendsConnection/totalCount
+                                                          {:FriendsConnection/edges [{:FriendsEdge/node [:Character/name]}]}]}
                            {:first 10})]}
             {:episode :EMPIRE})
            ({:Query/hero [:Character/name
-                          ({:Character/friendsConnection [:CharacterConnection/totalCount
-                                                          {:CharacterConnection/edges [{:CharacterNode/node [:Character/name]}]}]}
+                          ({:Character/friendsConnection [:FriendsConnection/totalCount
+                                                          {:FriendsConnection/edges [{:FriendsEdge/node [:Character/name]}]}]}
                            {:first 10})]}
             {:episode :JEDI})]))
 

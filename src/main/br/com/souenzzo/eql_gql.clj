@@ -23,8 +23,9 @@
          (get fragments fragment-name)))
 
 (defn field->type-index
-  [{{:keys [objects]} ::schema} object-id]
-  (let [object (get objects object-id)]
+  [{{:keys [objects interfaces]} ::schema} object-id]
+  (let [object (merge (get objects object-id)
+                      (get interfaces object-id))]
     (into {}
           (for [[id {:keys [type]}] (:fields object)]
             [id (if (list? type)
@@ -56,7 +57,6 @@
 
 (defmethod ->ast :inline-fragment
   [env frag]
-  (prn frag)
   (->ast env (assoc frag :type :fragment-definition)))
 
 (defmethod ->ast :field
